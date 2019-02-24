@@ -1,0 +1,211 @@
+AWSTemplateFormatVersion: 2010-09-09
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: openam
+  VpcCIDR:
+    Description: IP range (CIDR notation) for this VPC
+    Type: String
+    Default: 10.100.0.0/16
+  PublicSubnet1CIDR:
+    Description: IP range (CIDR notation) for the public subnet in the first Availability Zone
+    Type: String
+    Default: 10.100.0.0/24
+  PublicSubnet2CIDR:
+    Description: IP range (CIDR notation) for the public subnet in the second Availability Zone
+    Type: String
+    Default: 10.100.1.0/24
+  DeveloperCIDR:
+    Description: IP range (CIDR notation) for Developer
+    Type: String
+    Default: 0.0.0.0/0
+  InstanceType:
+    Type: String
+    Default: t2.micro
+  KeyPair:
+    Type: AWS::EC2::KeyPair::KeyName
+  HostedZoneName:
+    Type: String
+
+Resources:
+  Vpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCIDR
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: !Join ['-', ['Ref':ProjectName, vpc]]
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: !Ref PublicSubnet1CIDR
+      AvailabilityZone: !Select [ 0, !GetAZs '' ]
+      Tags:
+        - Key: Name
+          Value: !Join ['-', ['Ref':ProjectName, subnet]]
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: !Ref PublicSubnet2CIDR
+      AvailabilityZone: !Select [ 1, !GetAZs '' ]
+      Tags:
+        - Key: Name
+          Value: !Join ['-', ['Ref':ProjectName, subnet]]
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref Vpc
+  PublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet1
+  PublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet2
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Join ['-', ['Ref':ProjectName, igw]]
+  InternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref Vpc
+  InternetGatewayRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+  SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Join ['-', ['Ref':ProjectName, sg]]
+      GroupDescription: Default Security Group
+      VpcId: !Ref Vpc
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Ref DeveloperCIDR
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: !Ref DeveloperCIDR
+        - IpProtocol: tcp
+          FromPort: 8080
+          ToPort: 8080
+          CidrIp: !Ref DeveloperCIDR
+      Tags:
+        - Key: Name
+          Value: !Join ['-', ['Ref':ProjectName, sg]]
+  RecordSet:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneName: !Ref HostedZoneName
+      Name: !Join [".", ['Ref':ProjectName, 'Ref':HostedZoneName]]
+      Type: A
+      TTL: 60
+      ResourceRecords:
+        - !GetAtt OpsWorksInstance.PublicIp
+  ServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - opsworks.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Path: /
+      Policies:
+        - PolicyName: opsworks-service
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'ec2:*'
+                  - 'iam:PassRole'
+                  - 'cloudwatch:GetMetricStatistics'
+                  - 'elasticloadbalancing:*'
+                Resource: '*'
+  OpsWorksEC2Role:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Path: /
+  InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Path: /
+      Roles:
+        - !Ref OpsWorksEC2Role
+  OpsWorksStack:
+    Type: AWS::OpsWorks::Stack
+    Properties:
+      Name: !Join ['-', ['Ref':ProjectName, stack]]
+      ServiceRoleArn: !GetAtt ServiceRole.Arn
+      DefaultInstanceProfileArn: !GetAtt InstanceProfile.Arn
+      ConfigurationManager:
+        Name: Chef
+        Version: 12
+      DefaultOs: Amazon Linux 2
+      UseCustomCookbooks: true
+      CustomCookbooksSource:
+        Type: git
+        Url: https://github.com/ot-nemoto/opsworks-openam-cookbooks.git
+      DefaultRootDeviceType: ebs
+      DefaultSshKeyName: !Ref KeyPair
+      VpcId: !Ref Vpc
+      DefaultSubnetId: !Ref PublicSubnet1
+  OpsWorksLayer:
+    Type: AWS::OpsWorks::Layer
+    Properties:
+      StackId: !Ref OpsWorksStack
+      Type: custom
+      Shortname: openam
+      CustomRecipes:
+        Deploy:
+          - openam
+      EnableAutoHealing: true
+      AutoAssignElasticIps: true
+      AutoAssignPublicIps: false
+      Name: !Join ['-', ['Ref':ProjectName, layer]]
+      CustomSecurityGroupIds:
+        - !Ref SecurityGroup
+  OpsWorksInstance:
+    Type: AWS::OpsWorks::Instance
+    Properties:
+      StackId: !Ref OpsWorksStack
+      LayerIds:
+        - !Ref OpsWorksLayer
+      InstanceType: !Ref InstanceType
+
+Outputs:
+  PublicIp:
+    Value: !GetAtt OpsWorksInstance.PublicIp
+    Export:
+      Name: !Join ['-', ['Fn::Sub':'${AWS::StackName}', public-ip]]
+  PublicDns:
+    Value: !Ref RecordSet
+    Export:
+      Name: !Join ['-', ['Fn::Sub':'${AWS::StackName}', public-dns]]
