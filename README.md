@@ -42,7 +42,7 @@ echo ${DONWLOD_URI}
 
 ```sh
 # 例)
-KEY_PAIR=openam-key
+KEY_NAME=openam-key
 HOSTED_ZONE_NAME=example.com.
 OPENAM_WAR_URI=${DONWLOD_URI}/OpenAM-13.0.0.war
 ```
@@ -53,7 +53,7 @@ OPENAM_WAR_URI=${DONWLOD_URI}/OpenAM-13.0.0.war
 aws cloudformation create-stack \
   --stack-name openam \
   --capabilities CAPABILITY_IAM \
-  --parameters ParameterKey=KeyPair,ParameterValue=${KEY_PAIR} \
+  --parameters ParameterKey=KeyName,ParameterValue=${KEY_NAME} \
                ParameterKey=HostedZoneName,ParameterValue=${HOSTED_ZONE_NAME} \
                ParameterKey=OpenamWarUri,ParameterValue=${OPENAM_WAR_URI} \
   --template-body file://openam-template.yml
@@ -69,6 +69,6 @@ aws cloudformation create-stack \
 |PublicSubnet2CIDR|String|10.100.1.0/24|*No*|
 |DeveloperCIDR|String|0.0.0.0/0|*No*|
 |InstanceType|String|t2.micro|*No*|
-|KeyPair|AWS::EC2::KeyPair::KeyName|-|*Yes*|
+|KeyName|AWS::EC2::KeyPair::KeyName|-|*Yes*|
 |HostedZoneName|String|-|*Yes*|
 |OpenamWarUri|String|-|*Yes*|

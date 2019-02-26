@@ -23,7 +23,7 @@ Parameters:
   InstanceType:
     Type: String
     Default: t2.micro
-  KeyPair:
+  KeyName:
     Type: AWS::EC2::KeyPair::KeyName
   HostedZoneName:
     Type: String
@@ -111,15 +111,6 @@ Resources:
       Tags:
         - Key: Name
           Value: !Join ['-', ['Ref':ProjectName, sg]]
-  RecordSet:
-    Type: AWS::Route53::RecordSet
-    Properties:
-      HostedZoneName: !Ref HostedZoneName
-      Name: !Join [".", ['Ref':ProjectName, 'Ref':HostedZoneName]]
-      Type: A
-      TTL: 60
-      ResourceRecords:
-        - !GetAtt OpsWorksInstance.PublicIp
   ServiceRole:
     Type: AWS::IAM::Role
     Properties:
@@ -176,9 +167,11 @@ Resources:
         Type: git
         Url: https://github.com/ot-nemoto/opsworks-openam-cookbooks.git
       DefaultRootDeviceType: ebs
-      DefaultSshKeyName: !Ref KeyPair
+      DefaultSshKeyName: !Ref KeyName
       VpcId: !Ref Vpc
       DefaultSubnetId: !Ref PublicSubnet1
+      CustomJson:
+        OPENAM_WAR_URI: !Ref OpenamWarUri
   OpsWorksLayer:
     Type: AWS::OpsWorks::Layer
     Properties:
@@ -187,7 +180,7 @@ Resources:
       Shortname: openam
       CustomRecipes:
         Deploy:
-          - openam
+        - openam
       EnableAutoHealing: true
       AutoAssignElasticIps: true
       AutoAssignPublicIps: false
@@ -201,6 +194,15 @@ Resources:
       LayerIds:
         - !Ref OpsWorksLayer
       InstanceType: !Ref InstanceType
+  RecordSet:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneName: !Ref HostedZoneName
+      Name: !Join [".", ['Ref':ProjectName, 'Ref':HostedZoneName]]
+      Type: A
+      TTL: 60
+      ResourceRecords:
+        - !GetAtt OpsWorksInstance.PublicIp
 
 Outputs:
   PublicIp:
