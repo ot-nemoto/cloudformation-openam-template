@@ -1,0 +1,25 @@
+AWSTemplateFormatVersion: 2010-09-09
+
+Resources:
+  S3Bucket:
+    Type: AWS::S3::Bucket
+  S3BucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties: 
+      Bucket: !Ref S3Bucket
+      PolicyDocument:
+        Statement:
+        - Action:
+            - "s3:GetObject"
+          Effect: Allow
+          Resource: !Join ['', ['arn:aws:s3:::', 'Ref':S3Bucket, "/*"]]
+          Principal: "*"
+Outputs:
+  BucketName:
+    Value: !Ref S3Bucket
+    Export:
+      Name: !Join ['-', ['Fn::Sub':'${AWS::StackName}', bucket-name]]
+  DownloadUri:
+    Value: !Join ['', ['https://', 'Fn::GetAtt':S3Bucket.DomainName]]
+    Export:
+      Name: !Join ['-', ['Fn::Sub':'${AWS::StackName}', download-uri]]

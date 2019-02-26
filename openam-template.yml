@@ -27,6 +27,8 @@ Parameters:
     Type: AWS::EC2::KeyPair::KeyName
   HostedZoneName:
     Type: String
+  OpenamWarUri:
+    Type: String
 
 Resources:
   Vpc:
