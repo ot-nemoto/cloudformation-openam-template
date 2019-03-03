@@ -1,0 +1,149 @@
+AWSTemplateFormatVersion: 2010-09-09
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: sso-app
+  DeveloperCIDR:
+    Description: IP range (CIDR notation) for Developer
+    Type: String
+    Default: 0.0.0.0/0
+  InstanceType:
+    Type: String
+    Default: t2.micro
+  KeyName:
+    Type: AWS::EC2::KeyPair::KeyName
+  HostedZoneName:
+    Type: String
+  OpenAMStackName:
+    Type: String
+    Default: openam
+  # AppConfig
+  OpenAMUri:
+    Type: String
+    Default: ''
+  OpenAMAdminUser:
+    Type: String
+    Default: ''
+  OpenAMAdminPass:
+    Type: String
+    Default: ''
+  OpenAMAwsRoleArn:
+    Type: String
+    Default: ''
+  OpenAMAwsIDProviderArn:
+    Type: String
+    Default: ''
+  OneloginUri:
+    Type: String
+    Default: ''
+  OneloginClientId:
+    Type: String
+    Default: ''
+  OneloginClientSecret:
+    Type: String
+    Default: ''
+  OneloginRoleId:
+    Type: String
+    Default: ''
+  OneloginAppId:
+    Type: String
+    Default: ''
+
+Resources:
+  OpsWorksStack:
+    Type: AWS::OpsWorks::Stack
+    Properties:
+      Name: !Join ['-', ['Ref':ProjectName, stack]]
+      ServiceRoleArn:
+        Fn::ImportValue:
+          !Join ['-', ['Ref':OpenAMStackName, opsworks-service-role-arn]]
+      DefaultInstanceProfileArn:
+        Fn::ImportValue:
+          !Join ['-', ['Ref':OpenAMStackName, opsworks-instance-profile-arn]]
+      ConfigurationManager:
+        Name: Chef
+        Version: 12
+      DefaultOs: Amazon Linux 2
+      UseCustomCookbooks: true
+      CustomCookbooksSource:
+        Type: git
+        Url: https://github.com/ot-nemoto/opsworks-openam-cookbooks.git
+      DefaultRootDeviceType: ebs
+      DefaultSshKeyName: !Ref KeyName
+      VpcId:
+        Fn::ImportValue:
+          !Join ['-', ['Ref':OpenAMStackName, vpc]]
+      DefaultSubnetId:
+        Fn::ImportValue:
+          !Join ['-', ['Ref':OpenAMStackName, public-subnet-2]]
+      CustomJson:
+        DEVISE_DEFAULT_URL_OPTIONS: !Join [".", ['Ref':ProjectName, 'Ref':HostedZoneName]]
+        BETTER_ERRORS_ALLOW_IP: !Ref DeveloperCIDR
+        OPENAM_URI: !Ref OpenAMUri
+        OPENAM_ADMIN_USER: !Ref OpenAMAdminUser
+        OPENAM_ADMIN_PASS: !Ref OpenAMAdminPass
+        OPENAM_AWS_ROLE_ARN: !Ref OpenAMAwsRoleArn
+        OPENAM_AWS_ID_PROVIDER_ARN: !Ref OpenAMAwsIDProviderArn
+        ONELOGIN_URI: !Ref OneloginUri
+        ONELOGIN_CLIENT_ID: !Ref OneloginClientId
+        ONELOGIN_CLIENT_SECRET: !Ref OneloginClientSecret
+        ONELOGIN_ROLE_ID: !Ref OneloginRoleId
+        ONELOGIN_APP_ID: !Ref OneloginAppId
+  OpsWorksLayer:
+    Type: AWS::OpsWorks::Layer
+    Properties:
+      StackId: !Ref OpsWorksStack
+      Type: custom
+      Shortname: sso-app
+      CustomRecipes:
+        Deploy:
+        - sso-app
+      EnableAutoHealing: true
+      AutoAssignElasticIps: true
+      AutoAssignPublicIps: false
+      Name: !Join ['-', ['Ref':ProjectName, layer]]
+      CustomSecurityGroupIds:
+      - Fn::ImportValue:
+          !Join ['-', ['Ref':OpenAMStackName, security-group]]
+  OpsWorksInstance:
+    Type: AWS::OpsWorks::Instance
+    Properties:
+      StackId: !Ref OpsWorksStack
+      LayerIds:
+        - !Ref OpsWorksLayer
+      InstanceType: !Ref InstanceType
+  RecordSet:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneName: !Ref HostedZoneName
+      Name: !Join [".", ['Ref':ProjectName, 'Ref':HostedZoneName]]
+      Type: A
+      TTL: 60
+      ResourceRecords:
+        - !GetAtt OpsWorksInstance.PublicIp
+  SecurityGroupIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties: 
+      GroupId: 
+        Fn::ImportValue:
+          !Join ['-', ['Ref':OpenAMStackName, security-group]]
+      IpProtocol: tcp
+      FromPort: 80
+      ToPort: 80
+      CidrIp:
+        !Join
+        - '/'
+        - - !GetAtt OpsWorksInstance.PublicIp
+          - 32
+      Description: sso-app
+
+Outputs:
+  PublicIp:
+    Value: !GetAtt OpsWorksInstance.PublicIp
+    Export:
+      Name: !Join ['-', ['Fn::Sub':'${AWS::StackName}', public-ip]]
+  PublicDns:
+    Value: !Ref RecordSet
+    Export:
+      Name: !Join ['-', ['Fn::Sub':'${AWS::StackName}', public-dns]]

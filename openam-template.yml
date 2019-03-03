@@ -104,10 +104,6 @@ Resources:
           FromPort: 80
           ToPort: 80
           CidrIp: !Ref DeveloperCIDR
-        - IpProtocol: tcp
-          FromPort: 8080
-          ToPort: 8080
-          CidrIp: !Ref DeveloperCIDR
       Tags:
         - Key: Name
           Value: !Join ['-', ['Ref':ProjectName, sg]]
@@ -213,3 +209,27 @@ Outputs:
     Value: !Ref RecordSet
     Export:
       Name: !Join ['-', ['Fn::Sub':'${AWS::StackName}', public-dns]]
+  OpsWorksServiceRoleArn:
+    Value: !GetAtt ServiceRole.Arn
+    Export:
+      Name: !Join ['-', ['Fn::Sub':'${AWS::StackName}', opsworks, service-role-arn]]
+  OpsWorksInstanceProfileArn:
+    Value: !GetAtt InstanceProfile.Arn
+    Export:
+      Name: !Join ['-', ['Fn::Sub':'${AWS::StackName}', opsworks, instance-profile-arn]]
+  Vpc:
+    Value: !Ref Vpc
+    Export:
+      Name: !Join ['-', ['Fn::Sub':'${AWS::StackName}', vpc]]
+  PublicSubnet1:
+    Value: !Ref PublicSubnet1
+    Export:
+      Name: !Join ['-', ['Fn::Sub':'${AWS::StackName}', public-subnet-1]]
+  PublicSubnet2:
+    Value: !Ref PublicSubnet2
+    Export:
+      Name: !Join ['-', ['Fn::Sub':'${AWS::StackName}', public-subnet-2]]
+  SecurityGroup:
+    Value: !Ref SecurityGroup
+    Export:
+      Name: !Join ['-', ['Fn::Sub':'${AWS::StackName}', security-group]]
