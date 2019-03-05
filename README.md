@@ -63,6 +63,17 @@ aws cloudformation create-stack \
   --template-body file://openam-template.yml
 ```
 
+- OpenAMのURI取得
+
+```sh
+DOMAIN=$(aws cloudformation describe-stacks \
+  --stack-name openam \
+  --query 'Stacks[].Outputs[?OutputKey==`PublicDns`].OutputValue' \
+  --output text)
+echo http://${DOMAIN}/openam
+  #
+```
+
 ### Parameters
 
 |Name|Type|Default|Required|
@@ -76,3 +87,16 @@ aws cloudformation create-stack \
 |KeyName|AWS::EC2::KeyPair::KeyName|-|*Yes*|
 |HostedZoneName|String|-|*Yes*|
 |OpenamWarUri|String|-|*Yes*|
+
+### Outputs
+
+|Key|ExportName|Description|
+|--|--|--|
+|OpsWorksInstanceProfileArn|\<stack-name>-opsworks-instance-profile-arn|インスタンスプロファイルArn|
+|OpsWorksServiceRoleArn|\<stack-name>-opsworks-service-role-arn|OpsWorksのサービスロールArn|
+|PublicDns|\<stack-name>-public-dns|ドメイン|
+|PublicIp|\<stack-name>-public-ip|パブリックIPアドレス|
+|PublicSubnet1|\<stack-name>-public-subnet-1|パブリックサブネットID<br>（OpenAMが配置されているサブネット）|
+|PublicSubnet2|\<stack-name>-public-subnet-2|パブリックサブネットID<br>（未使用）|
+|SecurityGroup|\<stack-name>-security-group|セキュリティグループID|
+|Vpc|\<stack-name>-vpc|VPC ID|
