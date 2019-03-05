@@ -12,10 +12,12 @@
   - 以下の手順でS3へパブリックな環境を構築することも可能です(`OpenAM-13.0.0.war`がカレントにあること)
 
 ```sh
+# Warを配置するS3バケットを作成
 aws cloudformation create-stack \
   --stack-name public-bucket \
   --template-body file://public-bucket-template.yml
 
+# バケット名を取得
 BUCKET_NAME=$(aws cloudformation describe-stacks \
   --stack-name public-bucket \
   --query 'Stacks[].Outputs[?OutputKey==`BucketName`].OutputValue' \
@@ -23,8 +25,10 @@ BUCKET_NAME=$(aws cloudformation describe-stacks \
 echo ${BUCKET_NAME}
   #
 
+# OpenAMのwarファイルをS3にアップロード
 aws s3 cp OpenAM-13.0.0.war s3://${BUCKET_NAME}/
 
+# アップロードしたWarファイルのURIを取得
 DONWLOD_URI=$(aws cloudformation describe-stacks \
   --stack-name public-bucket \
   --query 'Stacks[].Outputs[?OutputKey==`DownloadUri`].OutputValue' \
