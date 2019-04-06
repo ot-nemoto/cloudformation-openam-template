@@ -1,5 +1,7 @@
 # cloudformation-openam-template
 
+## OpenAM
+
 ### 前提条件
 
 - **aws-cli** がインストールされ、プロファイルの設定がされていること
@@ -97,6 +99,80 @@ echo http://${DOMAIN}/openam
 |PublicDns|\<stack-name>-public-dns|ドメイン|
 |PublicIp|\<stack-name>-public-ip|パブリックIPアドレス|
 |PublicSubnet1|\<stack-name>-public-subnet-1|パブリックサブネットID<br>（OpenAMが配置されているサブネット）|
-|PublicSubnet2|\<stack-name>-public-subnet-2|パブリックサブネットID<br>（未使用）|
+|PublicSubnet2|\<stack-name>-public-subnet-2|パブリックサブネットID<br>（OpenDJも構築する場合はこのIPを利用）|
 |SecurityGroup|\<stack-name>-security-group|セキュリティグループID|
 |Vpc|\<stack-name>-vpc|VPC ID|
+
+## OpenDJ
+
+### 前提条件
+
+- OpenAMが上記スタックで構築されていること
+- OpenDJ
+  - Deployする場合はForgeRockからダウンロードします(要アカウント登録)
+  - ダウンロード可能な場所に配置して下さい
+  - 以下の手順でS3へパブリックな環境を構築することも可能です(`opendj-3.0.0-1.noarch.rpm`がカレントにあること)
+
+```sh
+# OpenDJのrpmファイルをS3にアップロード
+aws s3 cp opendj-3.0.0-1.noarch.rpm s3://${BUCKET_NAME}/
+
+DONWLOD_URI=$(aws cloudformation describe-stacks \
+  --stack-name public-bucket \
+  --query 'Stacks[].Outputs[?OutputKey==`DownloadUri`].OutputValue' \
+  --output text)
+echo ${DONWLOD_URI}
+```
+
+### 環境構築
+
+- 環境変数を設定
+  - 作成済み（作成した）キーペアのキー名
+  - Route53に登録済みのHostedZone名
+  - OpenDJがダウンロード可能なURI
+  - OpenDJのルートパスワード
+  - OpenDJのベースドメイン名
+
+```sh
+# 例)
+KEY_NAME=openam-key
+HOSTED_ZONE_NAME=example.com.
+OPENDJ_RPM_URI=${DONWLOD_URI}/opendj-3.0.0-1.noarch.rpm
+ROOT_PW=secret
+BASE_DN=dc=example\\\,dc=com
+```
+
+- 環境構築
+
+```sh
+aws cloudformation create-stack \
+  --stack-name opendj \
+  --capabilities CAPABILITY_IAM \
+  --parameters ParameterKey=KeyName,ParameterValue=${KEY_NAME} \
+               ParameterKey=HostedZoneName,ParameterValue=${HOSTED_ZONE_NAME} \
+               ParameterKey=OpendjRpmUri,ParameterValue=${OPENDJ_RPM_URI} \
+               ParameterKey=RootPw,ParameterValue="${ROOT_PW}" \
+               ParameterKey=BaseDn,ParameterValue="${BASE_DN}" \
+  --template-body file://opendj-template.yml
+```
+
+### Parameters
+
+|Name|Type|Default|Required|
+|--|--|--|--|
+|ProjectName|String|opendj|*No*|
+|OpenamStackName|String|openam|*No*|
+|DeveloperCIDR|String|0.0.0.0/0|*No*|
+|InstanceType|String|t2.micro|*No*|
+|KeyName|AWS::EC2::KeyPair::KeyName|-|*Yes*|
+|HostedZoneName|String|-|*Yes*|
+|OpendjRpmUri|String|-|*Yes*|
+|RootPw|String|-|*Yes*|
+|BaseDn|String|-|*Yes*|
+
+### Outputs
+
+|Key|ExportName|Description|
+|--|--|--|
+|PublicDns|\<stack-name>-public-dns|ドメイン|
+|PublicIp|\<stack-name>-public-ip|パブリックIPアドレス|

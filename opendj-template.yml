@@ -4,111 +4,55 @@ Parameters:
   ProjectName:
     Description: Project Name. This name will be a subdomain.
     Type: String
+    Default: opendj
+  OpenamStackName:
+    Description: Stack name that built OpenAM by Cloudformation.
+    Type: String
     Default: openam
-  VpcCIDR:
-    Description: IP range (CIDR notation) for this VPC
-    Type: String
-    Default: 10.100.0.0/16
-  PublicSubnet1CIDR:
-    Description: IP range (CIDR notation) for the public subnet in the first Availability Zone
-    Type: String
-    Default: 10.100.0.0/24
-  PublicSubnet2CIDR:
-    Description: IP range (CIDR notation) for the public subnet in the second Availability Zone
-    Type: String
-    Default: 10.100.1.0/24
   DeveloperCIDR:
     Description: IP range (CIDR notation) for Developer
     Type: String
     Default: 0.0.0.0/0
   InstanceType:
-    Description: Instant type to build OpenAM.
+    Description: Instant type to build OpenDJ.
     Type: String
     Default: t2.micro
   KeyName:
-    Description: Key name for connecting to OpenAM instance.
+    Description: Key name for connecting to OpenDJ instance.
     Type: AWS::EC2::KeyPair::KeyName
   HostedZoneName:
     Description: Hosted zone name.
     Type: String
-  OpenamWarUri:
-    Description: WAR file download URI.
+  OpendjRpmUri:
+    Description: RPM file download URI.
+    Type: String
+  RootPw:
+    Description: OpenDJ root password.
+    Type: String
+  BaseDn:
+    Description: OpenDJ base domain name.
     Type: String
 
 Resources:
-  Vpc:
-    Type: AWS::EC2::VPC
-    Properties:
-      CidrBlock: !Ref VpcCIDR
-      EnableDnsSupport: true
-      EnableDnsHostnames: true
-      Tags:
-        - Key: Name
-          Value: !Join ['-', ['Ref':ProjectName, vpc]]
-  PublicSubnet1:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref Vpc
-      CidrBlock: !Ref PublicSubnet1CIDR
-      AvailabilityZone: !Select [ 0, !GetAZs '' ]
-      Tags:
-        - Key: Name
-          Value: !Join ['-', ['Ref':ProjectName, subnet]]
-  PublicSubnet2:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref Vpc
-      CidrBlock: !Ref PublicSubnet2CIDR
-      AvailabilityZone: !Select [ 1, !GetAZs '' ]
-      Tags:
-        - Key: Name
-          Value: !Join ['-', ['Ref':ProjectName, subnet]]
-  PublicRouteTable:
-    Type: AWS::EC2::RouteTable
-    Properties:
-      VpcId: !Ref Vpc
-  PublicSubnet1RouteTableAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      RouteTableId: !Ref PublicRouteTable
-      SubnetId: !Ref PublicSubnet1
-  PublicSubnet2RouteTableAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      RouteTableId: !Ref PublicRouteTable
-      SubnetId: !Ref PublicSubnet2
-  InternetGateway:
-    Type: AWS::EC2::InternetGateway
-    Properties:
-      Tags:
-        - Key: Name
-          Value: !Join ['-', ['Ref':ProjectName, igw]]
-  InternetGatewayAttachment:
-    Type: AWS::EC2::VPCGatewayAttachment
-    Properties:
-      InternetGatewayId: !Ref InternetGateway
-      VpcId: !Ref Vpc
-  InternetGatewayRoute:
-    Type: AWS::EC2::Route
-    Properties:
-      RouteTableId: !Ref PublicRouteTable
-      DestinationCidrBlock: 0.0.0.0/0
-      GatewayId: !Ref InternetGateway
   SecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupName: !Join ['-', ['Ref':ProjectName, sg]]
-      GroupDescription: Default Security Group
-      VpcId: !Ref Vpc
+      GroupDescription: OpenDJ Security Group
+      VpcId:
+        Fn::ImportValue:
+          !Sub ${OpenamStackName}-vpc
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 22
           ToPort: 22
           CidrIp: !Ref DeveloperCIDR
         - IpProtocol: tcp
-          FromPort: 80
-          ToPort: 80
-          CidrIp: !Ref DeveloperCIDR
+          FromPort: 389
+          ToPort: 389
+          SourceSecurityGroupId:
+            Fn::ImportValue:
+              !Sub ${OpenamStackName}-security-group
       Tags:
         - Key: Name
           Value: !Join ['-', ['Ref':ProjectName, sg]]
@@ -169,19 +113,25 @@ Resources:
         Url: https://github.com/ot-nemoto/opsworks-openam-cookbooks.git
       DefaultRootDeviceType: ebs
       DefaultSshKeyName: !Ref KeyName
-      VpcId: !Ref Vpc
-      DefaultSubnetId: !Ref PublicSubnet1
+      VpcId:
+        Fn::ImportValue:
+          !Sub ${OpenamStackName}-vpc
+      DefaultSubnetId:
+        Fn::ImportValue:
+          !Sub ${OpenamStackName}-public-subnet-2
       CustomJson:
-        OPENAM_WAR_URI: !Ref OpenamWarUri
+        OPENDJ_RPM_URI: !Ref OpendjRpmUri
+        ROOT_PW: !Ref RootPw
+        BASE_DN: !Ref BaseDn
   OpsWorksLayer:
     Type: AWS::OpsWorks::Layer
     Properties:
       StackId: !Ref OpsWorksStack
       Type: custom
-      Shortname: openam
+      Shortname: opendj
       CustomRecipes:
         Deploy:
-        - openam
+        - opendj
       EnableAutoHealing: true
       AutoAssignElasticIps: true
       AutoAssignPublicIps: false
@@ -214,27 +164,3 @@ Outputs:
     Value: !Ref RecordSet
     Export:
       Name: !Join ['-', ['Fn::Sub':'${AWS::StackName}', public-dns]]
-  OpsWorksServiceRoleArn:
-    Value: !GetAtt ServiceRole.Arn
-    Export:
-      Name: !Join ['-', ['Fn::Sub':'${AWS::StackName}', opsworks, service-role-arn]]
-  OpsWorksInstanceProfileArn:
-    Value: !GetAtt InstanceProfile.Arn
-    Export:
-      Name: !Join ['-', ['Fn::Sub':'${AWS::StackName}', opsworks, instance-profile-arn]]
-  Vpc:
-    Value: !Ref Vpc
-    Export:
-      Name: !Join ['-', ['Fn::Sub':'${AWS::StackName}', vpc]]
-  PublicSubnet1:
-    Value: !Ref PublicSubnet1
-    Export:
-      Name: !Join ['-', ['Fn::Sub':'${AWS::StackName}', public-subnet-1]]
-  PublicSubnet2:
-    Value: !Ref PublicSubnet2
-    Export:
-      Name: !Join ['-', ['Fn::Sub':'${AWS::StackName}', public-subnet-2]]
-  SecurityGroup:
-    Value: !Ref SecurityGroup
-    Export:
-      Name: !Join ['-', ['Fn::Sub':'${AWS::StackName}', security-group]]
