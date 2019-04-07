@@ -164,3 +164,11 @@ Outputs:
     Value: !Ref RecordSet
     Export:
       Name: !Join ['-', ['Fn::Sub':'${AWS::StackName}', public-dns]]
+  LDAPServer:
+    Value: !Join [':', ["Fn::GetAtt": OpsWorksInstance.PrivateIp, 389]]
+  LDAPBindDN:
+    Value: "cn=Directory Manager"
+  LDAPBindPW:
+    Value: !Ref RootPw
+  LDAPBaseDN:
+    Value: !Ref BaseDn
