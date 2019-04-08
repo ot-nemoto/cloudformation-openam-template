@@ -29,9 +29,11 @@ Parameters:
   RootPw:
     Description: OpenDJ root password.
     Type: String
+    Default: secret
   BaseDn:
     Description: OpenDJ base domain name.
     Type: String
+    Default: dc=openam,dc=forgerock,dc=org
 
 Resources:
   SecurityGroup:

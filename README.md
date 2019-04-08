@@ -167,8 +167,8 @@ aws cloudformation create-stack \
 |KeyName|AWS::EC2::KeyPair::KeyName|-|*Yes*|
 |HostedZoneName|String|-|*Yes*|
 |OpendjRpmUri|String|-|*Yes*|
-|RootPw|String|-|*Yes*|
-|BaseDn|String|-|*Yes*|
+|RootPw|String|secret|*No*|
+|BaseDn|String|dc=openam,dc=forgerock,dc=org|*No*|
 
 ### Outputs
 
@@ -176,3 +176,7 @@ aws cloudformation create-stack \
 |--|--|--|
 |PublicDns|\<stack-name>-public-dns|ドメイン|
 |PublicIp|\<stack-name>-public-ip|パブリックIPアドレス|
+|LDAPServer|-|LDAPサーバー|
+|LDAPBindDN|-|LDAPバインドDN|
+|LDAPBindPW|-|LDAPバインドパスワード|
+|LDAPBindPW|-|LDAP組織DN|
